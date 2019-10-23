@@ -302,6 +302,8 @@ func (s *Service) findTasksByUser(ctx context.Context, tx Tx, filter influxdb.Ta
 		return nil, 0, err
 	}
 
+	matchFn := newTaskMatchFn(filter, org)
+
 	for _, m := range maps {
 		task, err := s.findTaskByIDWithAuth(ctx, tx, m.ResourceID)
 		if err != nil && err != influxdb.ErrTaskNotFound {
@@ -311,17 +313,14 @@ func (s *Service) findTasksByUser(ctx context.Context, tx Tx, filter influxdb.Ta
 			continue
 		}
 
-		if org != nil && task.OrganizationID != org.ID {
-			continue
-		}
-
-		if taskFilterMatch(filter.Type, task.Type) {
+		if matchFn == nil || matchFn(task) {
 			ts = append(ts, task)
+
+			if len(ts) >= filter.Limit {
+				break
+			}
 		}
 
-		if len(ts) >= filter.Limit {
-			break
-		}
 	}
 
 	return ts, len(ts), nil
@@ -358,6 +357,8 @@ func (s *Service) findTasksByOrg(ctx context.Context, tx Tx, filter influxdb.Tas
 	if err != nil {
 		return nil, 0, influxdb.ErrUnexpectedTaskBucketErr(err)
 	}
+
+	var k, v []byte
 	// we can filter by orgID
 	if filter.After != nil {
 		key, err := taskOrgKey(org.ID, *filter.After)
@@ -367,45 +368,20 @@ func (s *Service) findTasksByOrg(ctx context.Context, tx Tx, filter influxdb.Tas
 		// ignore the key:val returned in this seek because we are starting "after"
 		// this key
 		c.Seek(key)
+		k, v = c.Next()
 	} else {
-		// if we dont have an after we just move the cursor to the first instance of the
-		// orgID
+		// if we dont have an after we just move the cursor to the first instance of the orgID
 		key, err := org.ID.Encode()
 		if err != nil {
 			return nil, 0, influxdb.ErrInvalidTaskID
 		}
-		k, v := c.Seek(key)
-		if k != nil {
-			id, err := influxdb.IDFromString(string(v))
-			if err != nil {
-				return nil, 0, influxdb.ErrInvalidTaskID
-			}
 
-			t, err := s.findTaskByIDWithAuth(ctx, tx, *id)
-			if err != nil && err != influxdb.ErrTaskNotFound {
-				// we might have some crufty index's
-				return nil, 0, err
-			}
-
-			if t != nil {
-				if taskFilterMatch(filter.Type, t.Type) {
-					ts = append(ts, t)
-				}
-			}
-		}
+		k, v = c.Seek(key)
 	}
 
-	// if someone has a limit of 1
-	if len(ts) >= filter.Limit {
-		return ts, len(ts), nil
-	}
+	matchFn := newTaskMatchFn(filter, nil)
 
-	for {
-		k, v := c.Next()
-		if k == nil {
-			break
-		}
-
+	for k != nil {
 		id, err := influxdb.IDFromString(string(v))
 		if err != nil {
 			return nil, 0, influxdb.ErrInvalidTaskID
@@ -425,21 +401,15 @@ func (s *Service) findTasksByOrg(ctx context.Context, tx Tx, filter influxdb.Tas
 			break
 		}
 
-		if !taskFilterMatch(filter.Type, t.Type) {
-			continue
+		if matchFn == nil || matchFn(t) {
+			ts = append(ts, t)
+			// Check if we are over running the limit
+			if len(ts) >= filter.Limit {
+				break
+			}
 		}
 
-		// insert the new task into the list
-		ts = append(ts, t)
-
-		// Check if we are over running the limit
-		if len(ts) >= filter.Limit {
-			break
-		}
-	}
-
-	if filter.Name != nil {
-		ts = filterByName(ts, *filter.Name)
+		k, v = c.Next()
 	}
 
 	return ts, len(ts), err
@@ -478,6 +448,21 @@ func newTaskMatchFn(f influxdb.TaskFilter, org *influxdb.Organization) func(t *i
 		fn = func(t *influxdb.Task) bool {
 			res := prevFn == nil || prevFn(t)
 			return res && (expected == t.Name)
+		}
+	}
+
+	if f.Active != nil {
+		var expected string
+		if *f.Active {
+			expected = string(backend.TaskActive)
+		} else {
+			expected = string(backend.TaskInactive)
+		}
+
+		prevFn := fn
+		fn = func(t *influxdb.Task) bool {
+			res := prevFn == nil || prevFn(t)
+			return res && (t.Status == expected)
 		}
 	}
 
@@ -537,18 +522,6 @@ func (s *Service) findAllTasks(ctx context.Context, tx Tx, filter influxdb.TaskF
 	}
 
 	return ts, len(ts), err
-}
-
-func filterByName(ts []*influxdb.Task, taskName string) []*influxdb.Task {
-	filtered := []*influxdb.Task{}
-
-	for _, task := range ts {
-		if task.Name == taskName {
-			filtered = append(filtered, task)
-		}
-	}
-
-	return filtered
 }
 
 // CreateTask creates a new task.
@@ -1915,20 +1888,4 @@ func taskRunKey(taskID, runID influxdb.ID) ([]byte, error) {
 	}
 
 	return []byte(string(encodedID) + "/" + string(encodedRunID)), nil
-}
-
-func taskFilterMatch(filter *string, ttype string) bool {
-	// if they want a system task the record may be system or an empty string
-	if filter != nil {
-		// if the task is either "system" or "" it qaulifies as a system task
-		if *filter == influxdb.TaskSystemType && (ttype == influxdb.TaskSystemType || ttype == "") {
-			return true
-		}
-
-		// otherwise check task type against the filter
-		if *filter != ttype {
-			return false
-		}
-	}
-	return true
 }
