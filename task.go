@@ -402,7 +402,7 @@ type TaskFilter struct {
 	Organization   string
 	User           *ID
 	Limit          int
-	Active         *bool
+	Status         *string
 }
 
 // QueryParams Converts TaskFilter fields to url query params.

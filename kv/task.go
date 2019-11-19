@@ -451,18 +451,11 @@ func newTaskMatchFn(f influxdb.TaskFilter, org *influxdb.Organization) func(t *i
 		}
 	}
 
-	if f.Active != nil {
-		var expected string
-		if *f.Active {
-			expected = string(backend.TaskActive)
-		} else {
-			expected = string(backend.TaskInactive)
-		}
-
+	if f.Status != nil {
 		prevFn := fn
 		fn = func(t *influxdb.Task) bool {
 			res := prevFn == nil || prevFn(t)
-			return res && (t.Status == expected)
+			return res && (t.Status == *f.Status)
 		}
 	}
 

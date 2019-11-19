@@ -321,8 +321,8 @@ func testTaskCRUD(t *testing.T, sys *System) {
 	}
 
 	// Check task status filter
-	active := true
-	fs, _, err = sys.TaskService.FindTasks(sys.Ctx, influxdb.TaskFilter{Active: &active})
+	active := string(backend.TaskActive)
+	fs, _, err = sys.TaskService.FindTasks(sys.Ctx, influxdb.TaskFilter{Status: &active})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,8 +332,8 @@ func testTaskCRUD(t *testing.T, sys *System) {
 		t.Fatalf("expected to find %d active tasks, found: %d", len(activeTasks), len(fs))
 	}
 
-	active = false
-	fs, _, err = sys.TaskService.FindTasks(sys.Ctx, influxdb.TaskFilter{Active: &active})
+	inactive := string(backend.TaskInactive)
+	fs, _, err = sys.TaskService.FindTasks(sys.Ctx, influxdb.TaskFilter{Status: &inactive})
 	if err != nil {
 		t.Fatal(err)
 	}

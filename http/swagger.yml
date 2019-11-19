@@ -4342,10 +4342,10 @@ paths:
             type: string
           description: Filter tasks to a specific organization ID.
         - in: query
-          name: active
+          name: status
           schema:
             type: string
-          description: Filter tasks to a specific status--a value of "true" corresponds to active, "false" to inactive.
+          description: Filter tasks by a status--"inactive" or "active".
         - in: query
           name: limit
           schema:
