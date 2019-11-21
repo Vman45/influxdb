@@ -1400,6 +1400,7 @@ func TestService(t *testing.T) {
 			}
 
 			svc := NewService(
+				zap.NewNop(),
 				WithBucketSVC(bktSVC),
 				WithDashboardSVC(dashSVC),
 				WithLabelSVC(labelSVC),
