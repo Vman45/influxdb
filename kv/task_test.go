@@ -12,6 +12,7 @@ import (
 	"github.com/influxdata/influxdb/kv"
 	_ "github.com/influxdata/influxdb/query/builtin"
 	"github.com/influxdata/influxdb/task/servicetest"
+	"go.uber.org/zap"
 )
 
 func TestInmemTaskService(t *testing.T) {
@@ -23,7 +24,7 @@ func TestInmemTaskService(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			service := kv.NewService(store)
+			service := kv.NewService(zap.NewNop(), store)
 			ctx, cancelFunc := context.WithCancel(context.Background())
 
 			if err := service.Initialize(ctx); err != nil {
@@ -55,7 +56,7 @@ func TestBoltTaskService(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			service := kv.NewService(store)
+			service := kv.NewService(zap.NewNop(), store)
 			ctx, cancelFunc := context.WithCancel(context.Background())
 			if err := service.Initialize(ctx); err != nil {
 				t.Fatalf("error initializing urm service: %v", err)
@@ -84,7 +85,7 @@ func TestNextRunDue(t *testing.T) {
 	}
 	defer close()
 
-	service := kv.NewService(store)
+	service := kv.NewService(zap.NewNop(), store)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	if err := service.Initialize(ctx); err != nil {
 		t.Fatalf("error initializing urm service: %v", err)
@@ -184,7 +185,7 @@ func TestRetrieveTaskWithBadAuth(t *testing.T) {
 	}
 	defer close()
 
-	service := kv.NewService(store)
+	service := kv.NewService(zap.NewNop(), store)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	if err := service.Initialize(ctx); err != nil {
 		t.Fatalf("error initializing urm service: %v", err)

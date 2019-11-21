@@ -220,5 +220,5 @@ func newLocalKVService() (*kv.Service, error) {
 		return nil, err
 	}
 
-	return kv.NewService(store), nil
+	return kv.NewService(zap.NewNop(), store), nil
 }
